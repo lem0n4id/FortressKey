@@ -1,0 +1,4 @@
+cryptography
+pydantic-settings
+fastapi
+sqlalchemy

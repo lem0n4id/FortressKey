@@ -43,18 +43,21 @@ class PasswordManager:
 
     def register_user(self, username, password):
         password_hash = hashlib.sha256(password.encode()).hexdigest()
-        self.cursor.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)",
-                            (username, password_hash))
-        self.conn.commit()
+        try:
+            self.cursor.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                                (username, password_hash))
+            self.conn.commit()
 
-        # Add transaction to the blockchain
-        self.blockchain.add_transaction({
-            'action': 'register_user',
-            'username': username,
-            'password_hash': password
-        })
-        self.blockchain.mine_pending_transactions()
-        return True
+            # Add transaction to the blockchain
+            self.blockchain.add_transaction({
+                'action': 'register_user',
+                'username': username,
+                'password_hash': password
+            })
+            self.blockchain.mine_pending_transactions()
+            return True
+        except:
+            return False
 
     def login_user(self, username, password):
         password_hash = hashlib.sha256(password.encode()).hexdigest()

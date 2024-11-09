@@ -57,7 +57,7 @@ def login(user: UserLogin, response: Response):
     session_id = password_manager.login_user(user.username, user.password)
     if session_id is None:
         raise HTTPException(status_code=400, detail="Invalid username or password")
-    response.set_cookie(key="session_id", value=session_id, httponly=True)
+    response.set_cookie(key="session_id", value=session_id, httponly=False)
     return {"message": "Login successful", "session_id": session_id}
 
 # Route to log out a user

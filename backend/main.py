@@ -22,9 +22,10 @@ def main():
         elif choice == '2':
             username = input("Enter username: ")
             password = input("Enter password: ")
-            if password_manager.login_user(username, password):
+            session_id = password_manager.login_user(username, password)
+            if session_id:
                 print("Login successful!")
-                logged_in_menu(password_manager)
+                logged_in_menu(password_manager, session_id)
             else:
                 print("Invalid username or password.")
 
@@ -35,15 +36,17 @@ def main():
         else:
             print("Invalid choice. Please try again.")
 
-def logged_in_menu(password_manager):
+def logged_in_menu(password_manager, session_id):
     while True:
         print("\n--- Password Management ---")
         print("1. Add Password")
         print("2. Get All Passwords")
         print("3. Update Password")
-        print("4. Logout")
+        print("4. Delete Password")
+        print("5. Print all transactions")
+        print("6. Logout")
 
-        choice = input("Enter your choice (1-4): ")
+        choice = input("Enter your choice (1-5): ")
 
         if choice == '1':
             website = input("Enter website: ")
@@ -75,8 +78,19 @@ def logged_in_menu(password_manager):
             else:
                 print("Password not found.")
 
-        elif choice=='4':
-            password_manager.current_user = None
+        elif choice == '4':
+            website = input("Enter website to delete: ")
+            username = input("Enter username to delete: ")
+            if password_manager.delete_password(website, username):
+                print("Password deleted successfully!")
+            else:
+                print("Password not found.")
+
+        elif choice == '5':
+            password_manager.print_all_transactions()
+
+        elif choice == '6':
+            password_manager.logout_user(session_id)
             print("Logged out successfully.")
             break
 

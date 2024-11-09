@@ -7,16 +7,20 @@ function App() {
   const [loggedIn, setLoggedIn] = useState(false);
 
   return (
-    <div className="App">
-      {!loggedIn ? (
-        <>
-          <Register />
-          <Login setLoggedIn={setLoggedIn} />
-        </>
-      ) : (
-        <PasswordManager />
-      )}
-    </div>
+      <div className="App">
+        {!loggedIn ? (
+          <>
+            <Register />
+            <Login setLoggedIn={setLoggedIn} />
+          </>
+        ) : (
+          <PasswordManager />
+        )}
+      </div>
+      // <div className="App">
+      //
+      //       <PasswordManager/>
+      // </div>
   );
 }
 

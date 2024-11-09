@@ -33,3 +33,15 @@ class Blockchain:
             block.nonce += 1
             block.hash = block.calculate_hash()
         print(f"Block mined: {block.hash}")
+
+    def print_all_transactions(self):
+        for block in self.chain:
+            print(f"Block {block.index}:")
+            for transaction in block.transactions:
+                print(f"  Transaction:")
+                # pretty print the transaction
+                for key, value in transaction.items():
+                    print(f"    {key}: {value}")
+            print(f"  Hash: {block.hash}\n")
+
+

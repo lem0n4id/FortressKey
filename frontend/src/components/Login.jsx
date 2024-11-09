@@ -10,13 +10,14 @@ const Login = ({ setLoggedIn }) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-      },
+      }, credentials: 'include',
       body: JSON.stringify({ username, password }),
     });
 
     const data = await response.json();
-    if (data.success) {
+    if (data) {
       setLoggedIn(true);
+      console.log("logged in")
     }
     setMessage(data.message);
   };

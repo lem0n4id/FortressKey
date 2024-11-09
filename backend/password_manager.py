@@ -1,7 +1,7 @@
+import hashlib
+import uuid
 import sqlite3
-import hashlib
 from cryptography.fernet import Fernet
-import hashlib
 from backend.chain import Blockchain
 
 class User:
@@ -18,15 +18,19 @@ class PasswordManager:
         self.create_tables()
 
     def create_tables(self):
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
+        self.cursor.execute('''CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL
-            )
-        ''')
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS entries (
+            )''')
+
+        self.cursor.execute('''CREATE TABLE IF NOT EXISTS sessions (
+                session_id TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                FOREIGN KEY(username) REFERENCES users(username)
+            )''')
+
+        self.cursor.execute('''CREATE TABLE IF NOT EXISTS entries (
                 entry_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 website TEXT NOT NULL,
@@ -34,36 +38,51 @@ class PasswordManager:
                 password TEXT NOT NULL,
                 key TEXT NOT NULL,
                 FOREIGN KEY(user_id) REFERENCES users(user_id)
-            )
-        ''')
+            )''')
         self.conn.commit()
 
     def register_user(self, username, password):
-        # Check if user already exists
-        self.cursor.execute("SELECT * FROM users WHERE username=?", (username,))
-        if self.cursor.fetchone():
-            return False
-
-        # Hash the password
         password_hash = hashlib.sha256(password.encode()).hexdigest()
-        # Insert new user
         self.cursor.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)",
                             (username, password_hash))
         self.conn.commit()
+
+        # Add transaction to the blockchain
+        self.blockchain.add_transaction({
+            'action': 'register_user',
+            'username': username,
+            'password_hash': password
+        })
+        self.blockchain.mine_pending_transactions()
         return True
 
     def login_user(self, username, password):
-        # Hash the password
         password_hash = hashlib.sha256(password.encode()).hexdigest()
-
-        # Query user in the database
-        self.cursor.execute("SELECT * FROM users WHERE username=? AND password_hash=?", (username, password_hash))
+        self.cursor.execute("SELECT * FROM users WHERE username=? AND password_hash=?",
+                            (username, password_hash))
         user_row = self.cursor.fetchone()
-
         if user_row:
             self.current_user = User(username, password_hash)
+            # Generate session ID
+            session_id = str(uuid.uuid4())
+            # Store session in DB
+            self.cursor.execute("INSERT INTO sessions (session_id, username) VALUES (?, ?)",
+                                (session_id, username))
+            self.conn.commit()
+            return session_id
+        return None
+
+    def validate_session(self, session_id):
+        self.cursor.execute("SELECT username FROM sessions WHERE session_id=?", (session_id,))
+        user_row = self.cursor.fetchone()
+        if user_row:
+            self.current_user = User(user_row[0], None)  # No need for password in session validation
             return True
         return False
+
+    def logout_user(self, session_id):
+        self.cursor.execute("DELETE FROM sessions WHERE session_id=?", (session_id,))
+        self.conn.commit()
 
     def add_password(self, website, username, password):
         if not self.current_user:
@@ -84,6 +103,81 @@ class PasswordManager:
             (user_id, website, username, encrypted_password, key.decode())
         )
         self.conn.commit()
+
+        # Add transaction to the blockchain
+        self.blockchain.add_transaction({
+            'action': 'add_password',
+            'username': self.current_user.username,
+            'website': website,
+            'username_entry': username,
+            'password': encrypted_password
+        })
+        self.blockchain.mine_pending_transactions()
+        return True
+
+    def update_password(self, website, username, new_password):
+        if not self.current_user:
+            return False
+
+        # Get the user_id
+        self.cursor.execute("SELECT user_id FROM users WHERE username=?", (self.current_user.username,))
+        user_id = self.cursor.fetchone()[0]
+
+        # Encrypt the new password
+        key = Fernet.generate_key()
+        cipher_suite = Fernet(key)
+        encrypted_password = cipher_suite.encrypt(new_password.encode()).decode()
+
+        # Update the password entry in the 'entries' table
+        self.cursor.execute('''
+            UPDATE entries 
+            SET password = ?, key = ?
+            WHERE user_id = ? AND website = ? AND username = ?
+        ''', (encrypted_password, key.decode(), user_id, website, username))
+
+        if self.cursor.rowcount == 0:
+            return False
+
+        self.conn.commit()
+
+        # Add transaction to the blockchain
+        self.blockchain.add_transaction({
+            'action': 'update_password',
+            'username': self.current_user.username,
+            'website': website,
+            'username_entry': username,
+            'password': encrypted_password
+        })
+        self.blockchain.mine_pending_transactions()
+        return True
+
+    def delete_password(self, website, username):
+        if not self.current_user:
+            return False
+
+        # Get the user_id
+        self.cursor.execute("SELECT user_id FROM users WHERE username=?", (self.current_user.username,))
+        user_id = self.cursor.fetchone()[0]
+
+        # Delete the password entry from the 'entries' table
+        self.cursor.execute('''
+            DELETE FROM entries 
+            WHERE user_id = ? AND website = ? AND username = ?
+        ''', (user_id, website, username))
+
+        if self.cursor.rowcount == 0:
+            return False
+
+        self.conn.commit()
+
+        # Add transaction to the blockchain
+        self.blockchain.add_transaction({
+            'action': 'delete_password',
+            'username': self.current_user.username,
+            'website': website,
+            'username_entry': username
+        })
+        self.blockchain.mine_pending_transactions()
         return True
 
     def get_all_passwords(self):
@@ -110,28 +204,6 @@ class PasswordManager:
             })
         return passwords
 
-    def update_password(self, website, username, new_password):
-        if not self.current_user:
-            return False
+    def print_all_transactions(self):
+        self.blockchain.print_all_transactions()
 
-        # Get the user_id
-        self.cursor.execute("SELECT user_id FROM users WHERE username=?", (self.current_user.username,))
-        user_id = self.cursor.fetchone()[0]
-
-        # Encrypt the new password
-        key = Fernet.generate_key()
-        cipher_suite = Fernet(key)
-        encrypted_password = cipher_suite.encrypt(new_password.encode()).decode()
-
-        # Update the password entry in the 'entries' table
-        self.cursor.execute('''
-            UPDATE entries 
-            SET password = ?, key = ?
-            WHERE user_id = ? AND website = ? AND username = ?
-        ''', (encrypted_password, key.decode(), user_id, website, username))
-
-        if self.cursor.rowcount == 0:
-            return False
-
-        self.conn.commit()
-        return True
